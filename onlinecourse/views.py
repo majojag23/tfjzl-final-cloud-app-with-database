@@ -115,22 +115,41 @@ def submit(request, course_id):
 
 # An example method to collect the selected choices from the exam form from the request object
 def extract_answers(request):
-   submitted_anwsers = []
-   for key in request.POST:
-       if key.startswith('choice'):
-           value = request.POST[key]
-           choice_id = int(value)
-           submitted_anwsers.append(choice_id)
-   return submitted_anwsers
+    submitted_answers = []
+    for key, value in request.POST.items():
+        if key.startswith('choice_'):
+            submitted_answers.append(int(value))
+    return submitted_answers
 
 
-# <HINT> Create an exam result view to check if learner passed exam and show their question results and result for each question,
-# you may implement it based on the following logic:
-        # Get course and submission based on their ids
-        # Get the selected choice ids from the submission record
-        # For each selected choice, check if it is a correct answer or not
-        # Calculate the total score
+def submit(request, course_id):
+    course = get_object_or_404(Course, pk=course_id)
+    user = request.user
+    if request.method == 'POST':
+        submission = Submission.objects.create(user=user, course=course)
+        selected_ids = request.POST.getlist('choice')
+        for choice_id in selected_ids:
+            choice = get_object_or_404(Choice, pk=choice_id)
+            submission.choices.add(choice)
+        submission.save()
+        return redirect('onlinecourse:show_exam_result', course_id=course.id, submission_id=submission.id)
+    return redirect('onlinecourse:course_details', course_id=course.id)
+
+
 def show_exam_result(request, course_id, submission_id):
-
+    course = get_object_or_404(Course, pk=course_id)
+    submission = get_object_or_404(Submission, pk=submission_id)
+    total_score = 0
+    selected_choices = submission.choices.all()
+    for question in course.question_set.all():
+        if question.is_get_score(selected_choices):
+            total_score += question.grade
+    context = {
+        'course': course,
+        'selected_choices': selected_choices,
+        'total_score': total_score,
+        'submission': submission
+    }
+    return render(request, 'onlinecourse/exam_result_bootstrap.html', context)
 
 
